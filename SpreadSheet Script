@@ -1,0 +1,233 @@
+function doGet(e) { 
+  Logger.log( JSON.stringify(e) );  // view parameters
+
+  var result = 'Ok'; // assume success
+
+  if (e.parameter == undefined) {
+    result = 'No Parameters';
+  }
+  else {
+    var id = '1tbTzSwlKZoZY5IuVruWXejgcMFaaYL_6Y542-vOE7rU'; // Spreadsheet ID
+    var sheet = SpreadsheetApp.openById(id).getActiveSheet(); // Spreadsheet page
+    var newRow = sheet.getLastRow() + 1; // 1 cell below of the last row to set new data
+    var rowData = [];    //data array for 1st row
+    var rowData2 = [];   //data array for 2nd row
+    var rowData3 = [];   //data array for 3rd row
+    var rowData4 = [];   //data array for 4th row
+    var rowData5 = [];   //data array for 5th row
+    var rowData6 = [];   //data array for 6th row
+  
+    
+    var dt1 = new Date(); 
+    dt1.setSeconds( dt1.getSeconds() - 100 ); //befor 100 seconds of current time
+    rowData[0] = dt1;  // set date to array
+    var dt2 = new Date();
+    dt2.setSeconds( dt2.getSeconds() - 80 );  //befor 80 seconds of current time
+    rowData2[0] = dt2; // set date to array
+    var dt3 = new Date();
+    dt3.setSeconds( dt3.getSeconds() - 60 );  //befor 60 seconds of current time
+    rowData3[0] = dt3; // set date to array
+    var dt4 = new Date();
+    dt4.setSeconds( dt4.getSeconds() - 40 );  //befor 40 seconds of current time
+    rowData4[0] = dt4; // set date to array
+    var dt5 = new Date();
+    dt5.setSeconds( dt5.getSeconds() - 20 );    //befor 20 seconds of current time
+    rowData5[0] = dt5; // set date to array
+    rowData6[0] = new Date();                  // set current time and date to array
+    
+    
+    
+
+    // set all data from sensors to respective array
+    for (var param in e.parameter) {
+      Logger.log('In for loop, param='+param);
+      var value = stripQuotes(e.parameter[param]); // all temperature and humidity data in 1 string form
+      var listv = value.split(',');  // now it become an array
+      console.log(listv);  
+      //Logger.log(param + ':' + e.parameter[param]);
+      switch (param) {
+        case 'tempData': //Parameter we send in the url
+          
+          var i;
+          for (i = 0; i < 8; i++) { 
+            rowData[i+1] = listv[i];
+            rowData2[i+1] = listv[i+8];
+            rowData3[i+1] = listv[i+16];
+            rowData4[i+1] = listv[i+24];
+            rowData5[i+1] = listv[i+32];
+            rowData6[i+1] = listv[i+40];
+            
+          }
+          
+
+          break;
+     // case 'column_C':  // you can use it if you have a another parameter in the url
+       // rowData[number] = value;
+       // break;
+        default:
+          result = "unsupported parameter";
+      }
+    }
+    
+    //sending a connection email part by pushingbox.com // only for temperature, not for humidity; however, they cannot be zero seperatally
+    for (i = 0; i < 4; i++){
+      // when the connection of the sensor is lost, it send a data as '0'. This code search a zero in the each array // if one of them were zero, connection mail will be send
+      if(parseInt(rowData[2*i+1])==0 || parseInt(rowData2[2*i+1])==0 || parseInt(rowData3[2*i+1])==0 ||parseInt(rowData4[2*i+1])==0 ||parseInt(rowData5[2*i+1])==0 ||parseInt(rowData6[2*i+1])==0){
+        if(parseInt(sheet.getRange(2, 15+i).getValue())==1){ //if the sensor were connect before, value in the respective cell is '1'
+          var response3 = UrlFetchApp.fetch("api.pushingbox.com/pushingbox?devid=v6118780AA8B3EFB"); //send connection email by pushingbox service
+          Logger.log(response3.getContentText());
+          sheet.getRange(2, 15+i).setValue('0'); //since mail was send, change value in the respective cell to zero. in all other condition it must be return to '1' again
+        }
+      }
+      else{
+        sheet.getRange(2, 15+i).setValue('1'); //set '1' to connection email part in respective cell
+      }
+    }
+    
+    //sending a high temperature alert email part by pushingbox.com // only for temperature, not for humidity.
+    
+    var highlimit = [24,22,26,23]; //send email when temperature will above these limit
+    var lowlimit = [20,18,21,19]; //sending email service activate when temperature will below these limit
+    
+    
+    for (i = 0; i < 4; i++){
+      //searching for a any high temp
+      if(parseInt(rowData[2*i+1])> highlimit[i] || parseInt(rowData2[2*i+1])> highlimit[i] || parseInt(rowData3[2*i+1])> highlimit[i] || parseInt(rowData4[2*i+1])> highlimit[i] || parseInt(rowData5[2*i+1])> highlimit[i] ||parseInt(rowData6[2*i+1])> highlimit[i]){
+        if(parseInt(sheet.getRange(1, 15+i).getValue())==1){ //if the temperature were low before, value in the respective cell is '1'
+          var response3 = UrlFetchApp.fetch("api.pushingbox.com/pushingbox?devid=v2B0B6641CDA5785");  //send high temperature alert email by pushingbox service
+          Logger.log(response3.getContentText());
+          sheet.getRange(1, 15+i).setValue('0'); //set '0' to high temp email part in respective cell
+        }
+      }
+      else if(parseInt(rowData[2*i+1])< lowlimit[i] || parseInt(rowData2[2*i+1])< lowlimit[i] || parseInt(rowData3[2*i+1])< lowlimit[i] || parseInt(rowData4[2*i+1])< lowlimit[i] || parseInt(rowData5[2*i+1])< lowlimit[i] ||parseInt(rowData6[2*i+1])< lowlimit[i]){
+        sheet.getRange(1, 15+i).setValue('1'); //set '1' to high temp email part in respective cell
+      }
+         
+    }
+    
+    
+    //TEMP OF ISTANBUL PART
+    var url = "http://api.openweathermap.org/data/2.5/weather?q=Istanbul&appid=88eb3d560a0932c305827f8a0dfb6456&units=metric" // 1)  The URL to call
+    var response = UrlFetchApp.fetch(url, {   // 2) call the URL
+           headers: {
+             'Content-Type': 'application/json',  // 3) Make sure we use JSON as transport
+             'Accept': 'application/json'
+           }
+    });
+    var json = response.getContentText(); // 4) Get the content of the API call (this gets the response as TEXT(string)
+    var data = JSON.parse(json); // 5) Parse the TEXT to JSON (make objects out of it)
+  
+    var temperature = data.main.temp // 6) get the temperature data
+    var humidity = data.main.humidity // 7) get the humidity data
+    
+
+    // set temperature data to aryas
+    rowData[9]= temperature
+    rowData2[9]= temperature
+    rowData3[9]= temperature
+    rowData4[9]= temperature
+    rowData5[9]= temperature
+    rowData6[9]= temperature
+    
+    // set humidity data to aryas
+    rowData[10]= humidity
+    rowData2[10]= humidity
+    rowData3[10]= humidity
+    rowData4[10]= humidity
+    rowData5[10]= humidity
+    rowData6[10]= humidity
+    
+    
+    
+    
+    //TEMP OF KANDILLI PART
+    var url2 = "http://api.openweathermap.org/data/2.5/weather?lat=41.060408&lon=29.063181&appid=88eb3d560a0932c305827f8a0dfb6456&units=metric" // 1)  The URL to call
+    var response2 = UrlFetchApp.fetch(url2, {   // 2) call the URL
+          headers: {
+            'Content-Type': 'application/json',  // 3) Make sure we use JSON as transport
+            'Accept': 'application/json'
+        }
+    });
+    var json2 = response2.getContentText(); // 4) Get the content of the API call (this gets the response as TEXT(string)
+    var data2 = JSON.parse(json2); // 5) Parse the TEXT to JSON (make objects out of it)
+    var temperature2 = data2.main.temp // 6) get the temperature data
+    var humidity2 = data2.main.humidity // 7) get the humidity data
+    
+    // set temperature data to aryas
+    rowData[11]= temperature2
+    rowData2[11]= temperature2
+    rowData3[11]= temperature2
+    rowData4[11]= temperature2
+    rowData5[11]= temperature2
+    rowData6[11]= temperature2
+    
+    // set humidity data to aryas
+    rowData[12]= humidity2
+    rowData2[12]= humidity2
+    rowData3[12]= humidity2
+    rowData4[12]= humidity2
+    rowData5[12]= humidity2
+    rowData6[12]= humidity2
+    
+    
+    
+    Logger.log(JSON.stringify(rowData));
+
+    // set all data set to new rows respectively
+    var newRange = sheet.getRange(newRow, 1, 1, rowData.length);
+    newRange.setValues([rowData]); 
+    var newRange2 = sheet.getRange(newRow + 1, 1, 1, rowData2.length);
+    newRange2.setValues([rowData2]);
+    var newRange3 = sheet.getRange(newRow + 2, 1, 1, rowData3.length);
+    newRange3.setValues([rowData3]);
+    var newRange4 = sheet.getRange(newRow + 3, 1, 1, rowData4.length);
+    newRange4.setValues([rowData4]);
+    var newRange5 = sheet.getRange(newRow + 4, 1, 1, rowData5.length);
+    newRange5.setValues([rowData5]);
+    var newRange6 = sheet.getRange(newRow + 5, 1, 1, rowData6.length);
+    newRange6.setValues([rowData6]);
+    
+    // hanimaga connecion part
+    var idFarm = '1WTnt0Xj02fRYUpKjWn-raMXc3HF1pgspREr4co-7kDI'; // Spreadsheet ID
+    var sheetFarm = SpreadsheetApp.openById(idFarm).getActiveSheet();
+    var lastRowFarm = sheetFarm.getLastRow();
+   
+    var timeFarm =sheetFarm.getRange(lastRowFarm, 1).getValue(); // time of last data send by arduino
+    
+    var timeCurrent = new Date();
+    timeCurrent.setSeconds(timeCurrent.getSeconds() - 600 );
+    if( timeCurrent>timeFarm){
+      if(parseInt(sheet.getRange(1, 20).getValue())==1){ 
+        var response = UrlFetchApp.fetch("api.pushingbox.com/pushingbox?devid=v56973CEB2E63F0F");  //send high temperature alert email by pushingbox service
+        Logger.log(response.getContentText());
+        sheet.getRange(1, 20).setValue('0'); //set '0' to Hanimaga connection email part in respective cell
+      }
+    }
+    else{
+      sheet.getRange(1, 20).setValue('1'); //set '1' to Hanimaga connection email part in respective cell
+    }
+    
+    //Auto-Copy sheet to new sheet
+    var lastRow = sheet.getLastRow(); //number of Row
+    if(lastRow>40000){   //Check that if it pass the limit number of row
+      var datass = sheet.getSheetValues(1, 1, lastRow , 20);  // get all data in sheet
+      var newSheet = SpreadsheetApp.create('Arduino :' + sheet.getRange(3, 1).getValue()); //create new sheet and give it a name
+      var newshg =newSheet.getSheetByName("Sheet1"); 
+      newshg.getRange(1,1,lastRow,20).setValues(datass); //set data to new sheet
+      sheet.deleteRows(3, lastRow+100); // delete data from existing sheet
+    }
+    
+    
+    
+  }
+
+  // Return result of operation
+  return ContentService.createTextOutput(result);
+}
+
+/**
+* Remove leading and trailing single or double quotes
+*/
+function stripQuotes( value ) {
+  return value.replace(/^["']|['"]$/g, "");
+}
